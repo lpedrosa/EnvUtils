@@ -7,7 +7,6 @@ function ConvertFrom-Environment {
         # Specifies a path to one or more locations.
         [Parameter(Mandatory = $true,
             Position = 0,
-            ParameterSetName = "ParameterSetName",
             ValueFromPipeline = $true,
             ValueFromPipelineByPropertyName = $true,
             HelpMessage = "Path to one or more locations.")]
@@ -21,34 +20,45 @@ function ConvertFrom-Environment {
         $NoExpand
     )
 
-    $envFileContent = Get-Content $Path -ErrorAction Stop
-    $result = @{}
+    begin {
+        $result = [hashtable]@{}
+    }
 
-    foreach ($line in $envFileContent) {
-        switch -Wildcard ($line) {
-            "#*" { Write-Debug "Comment: $line"; continue }
-            "*=*" { 
-                Write-Debug "Assignment: $line"
-                # tell split to split the string in the first occurrence of '='
-                # i.e. return max 2 two substrings when splitting
-                $key, $value = $line -split "=", 2
+    process {
+        $envFileContent = Get-Content $Path -ErrorAction Stop
 
-                if (![string]::IsNullOrWhiteSpace($value)) {
-                    $result[$key.Trim()] = $value.Trim()
+        foreach ($line in $envFileContent) {
+            Write-Debug "Processing line: $line"
+            switch -Wildcard ($line) {
+                "#*" { Write-Debug "Comment: $line"; continue }
+                "*=*" {
+                    Write-Debug "Assignment: $line"
+                    # tell split to split the string in the first occurrence of '='
+                    # i.e. return max 2 two substrings when splitting
+                    $key, $value = $line -split "=", 2
+
+                    if (![string]::IsNullOrWhiteSpace($value)) {
+                        if ($result.ContainsKey($key.Trim())) {
+                            Write-Debug "Overriding key: $($key.Trim())"
+                        }
+                        $result[$key.Trim()] = $value.Trim()
+                    }
+                    else {
+                        Write-Warning "skipping unset key '$key'"
+                    }
                 }
-                else {
-                    Write-Warning "skipping unset key '$key'"
-                }
+                Default { Write-Debug "Unhandled: $line"; continue }
             }
-            Default { Write-Debug "Unhandled: $line"; continue }
         }
     }
 
-    if ($NoExpand) {
-        $result
-    }
-    else {
-        Expand-Environment $result
+    end {
+        if ($NoExpand) {
+            $result
+        }
+        else {
+            Expand-Environment $result
+        }
     }
 }
 
@@ -171,7 +181,6 @@ function Invoke-Environment {
     param (
         [Parameter(Mandatory = $true,
             Position = 0,
-            ParameterSetName = "ParameterSetName",
             ValueFromPipeline = $true,
             ValueFromPipelineByPropertyName = $true)]
         [scriptblock]
