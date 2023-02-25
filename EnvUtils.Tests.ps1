@@ -67,3 +67,30 @@ Describe "ConvertFrom-Environment" {
         Remove-Item '.fake.env'
     }
 }
+
+Describe "Invoke-Environment" {
+    Context "From EnvironmentFile" {
+        It "Should make variables available only in the script block" {
+            [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
+            Invoke-Environment -EnvironmentFile .\fixtures\.simple.env {
+                [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be "WORLD"
+            }
+            [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
+        }
+    }
+
+    Context "From Environment Object" {
+        It "Should make variables available only in the script block" {
+            $environment = @{
+                HELLO = "WORLD"
+            }
+
+            [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
+            Invoke-Environment -Environment $environment {
+                [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $environment.HELLO
+            }
+            [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
+
+        }
+    }
+}
