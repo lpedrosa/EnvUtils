@@ -11,6 +11,13 @@ Describe "ConvertFrom-Environment" {
         $environment["MESSAGE"] | Should -Be "This is a test !1"
     }
 
+    It "Should aggregate and process multiple files" {
+        $files = @("./fixtures/.simple.env", "./fixtures/.complex-values.env")
+        $environment = ConvertFrom-Environment -Path $files
+
+        $environment.Count | Should -Be 3
+    }
+
     It "Should not split values that have '=' in them" {
         $environment = ConvertFrom-Environment "./fixtures/.complex-values.env"
 

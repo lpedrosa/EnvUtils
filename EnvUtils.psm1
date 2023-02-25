@@ -1,5 +1,5 @@
-$ComplexExpansionRegex = '(.*)\${([\w]*(?::-[\w/]*)?)?}(.*)'
-$SimpleExpansionRegex = '(.*)\$([^{][\w]+)(.*)'
+$script:ComplexExpansionRegex = '(.*)\${([\w]*(?::-[\w/]*)?)?}(.*)'
+$script:SimpleExpansionRegex = '(.*)\$([^{][\w]+)(.*)'
 
 function ConvertFrom-Environment {
     [CmdletBinding()]
