@@ -118,11 +118,11 @@ function Expand-Environment {
             $value = [System.Environment]::GetEnvironmentVariable($varToReplace)
         }
         else {
-            Write-Warning "could not expand value for key '$originalKey'";
+            Write-Warning "could not expand var '$varToReplace' for key '$originalKey'";
             return $originalValue, $false
         }
 
-        $replaced = $originalValue -replace $SimpleExpansionRegex, "`$1$value`$3"
+        $replaced = $originalValue -replace $SimpleExpansionRegex, "`${1}$value`${3}"
 
         $replaced, $true
     }
@@ -158,11 +158,11 @@ function Expand-Environment {
             $value = $defaultIfNoMatch
         }
         else {
-            Write-Warning "could not expand value for key '$originalKey'";
+            Write-Warning "could not expand var '$varToReplace' for key '$originalKey'";
             return $originalValue, $false
         }
 
-        $replaced = $originalValue -replace $ComplexExpansionRegex, "`$1$value`$3"
+        $replaced = $originalValue -replace $ComplexExpansionRegex, "`${1}$value`${3}"
 
         $replaced, $true
     }

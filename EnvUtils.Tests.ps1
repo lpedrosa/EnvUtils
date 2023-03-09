@@ -73,6 +73,22 @@ Describe "ConvertFrom-Environment" {
             Remove-Item -Path "Env:ENVUTILS_FROM_ENV"
         }
 
+        It "Should expand numbers correctly" {
+            # Numbers were not being expanded correctly because in the '-replace' expression I
+            # should have been using the unambiguous backreference syntax i.e., ${1} as opposed to $1
+            #
+            # More info here: https://learn.microsoft.com/en-us/dotnet/standard/base-types/substitutions-in-regular-expressions#substituting-a-numbered-group
+
+            $environment = ConvertFrom-Environment "./fixtures/.number-values.env"
+
+            $expansionValue = $environment["VAR_1"]
+
+            $environment["VAR_2"] | Should -Be $expansionValue
+            $environment["VAR_3"] | Should -Be $expansionValue
+
+            $environment["COMPLEX"] | Should -Be "$($expansionValue)$($expansionValue)$($expansionValue)"
+        }
+
         It "Should not expand variables if asked" {
             'COOL_VALUE=nice nice
         VAR_TO_EXPAND=$COOL_VALUE' | Tee-Object '.fake.env'
