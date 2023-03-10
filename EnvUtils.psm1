@@ -1,5 +1,4 @@
-$script:ComplexExpansionRegex = '(.*)\${([\w]*(?::-[\w/]*)?)?}(.*)'
-$script:SimpleExpansionRegex = '(.*)\$([^{][\w]+)(.*)'
+Import-Module $PSScriptRoot/private/EnvUtilsExpansion.psm1 -Force
 
 function ConvertFrom-Environment {
     [CmdletBinding()]
@@ -57,123 +56,13 @@ function ConvertFrom-Environment {
             $result
         }
         else {
-            Expand-Environment $result
+            # Preferences aren't passed on across module boundaries. In this particular case we want
+            # that to happen, so we have to do so explicitly.
+            #
+            # See more: https://github.com/PowerShell/PowerShell/issues/4568
+            Expand-Environment $result -WarningAction:$WarningPreference -Debug:$DebugPreference -ErrorAction:$ErrorActionPreference
         }
     }
-}
-
-function Expand-Environment {
-    param(
-        [hashtable]
-        $environment
-    )
-
-    function Expand-Value {
-        param (
-            [string]$originalKey,
-            [string]$originalValue
-        )
-
-        $replaced = $originalValue
-        $continueExpanding = $false
-
-        if ($originalValue -match $ComplexExpansionRegex) {
-            $replaced, $continueExpanding = Expand-ComplexValue $originalKey $originalValue $Matches
-        }
-        elseif ($originalValue -match $SimpleExpansionRegex) {
-            $replaced, $continueExpanding = Expand-SimpleValue $originalKey $originalValue $Matches
-        }
-
-        if ($continueExpanding) {
-            Expand-Value $originalKey $replaced
-        }
-        else {
-            $replaced
-        }
-    }
-
-    function Expand-SimpleValue {
-        param(
-            [string]$originalKey,
-            [string]$originalValue,
-            [hashtable] $regexMatches
-        )
-
-        $varToReplace = $regexMatches.2
-
-        # check if the environment table has that key
-        $value = $environment[$varToReplace]
-        if ($value) {
-            # fail on recursive expansion
-            if ($value -match $ComplexExpansionRegex -match $SimpleExpansionRegex) {
-                Write-Warning "skipping recursive expansion for key '$originalKey'"
-                return $originalValue, $false
-            }
-            # otherwise keep value as is
-            Write-Debug "Expand-SimpleValue: Local expansion for key $originalKey"
-        }
-        elseif ([System.Environment]::GetEnvironmentVariable($varToReplace)) {
-            # use value from current process environment
-            Write-Debug "Expand-ComplexValue: Environment expansion for key $originalKey"
-            $value = [System.Environment]::GetEnvironmentVariable($varToReplace)
-        }
-        else {
-            Write-Warning "could not expand var '$varToReplace' for key '$originalKey'";
-            return $originalValue, $false
-        }
-
-        $replaced = $originalValue -replace $SimpleExpansionRegex, "`${1}$value`${3}"
-
-        $replaced, $true
-    }
-
-    function Expand-ComplexValue {
-        param(
-            [string]$originalKey,
-            [string]$originalValue,
-            [hashtable] $regexMatches
-        )
-        $varToReplace, $defaultIfNoMatch = $regexMatches.2 -split ':-', 2
-
-        # check if the environment table has that key
-        $value = $environment[$varToReplace]
-
-        if ($value) {
-            # fail on recursive expansion
-            if ($value -match $ComplexExpansionRegex -match $SimpleExpansionRegex) {
-                Write-Warning "skipping recursive expansion for key '$originalKey'"
-                return $originalValue, $false
-            }
-            # otherwise keep value as is
-            Write-Debug "Expand-ComplexValue: Local expansion for key $originalKey"
-        }
-        elseif ([System.Environment]::GetEnvironmentVariable($varToReplace)) {
-            # use value from current process environment
-            Write-Debug "Expand-ComplexValue: Environment expansion for key $originalKey"
-            $value = [System.Environment]::GetEnvironmentVariable($varToReplace)
-        }
-        elseif ($defaultIfNoMatch) {
-            # try to use default
-            Write-Debug "Expand-ComplexValue: Default expansion for key $originalKey)"
-            $value = $defaultIfNoMatch
-        }
-        else {
-            Write-Warning "could not expand var '$varToReplace' for key '$originalKey'";
-            return $originalValue, $false
-        }
-
-        $replaced = $originalValue -replace $ComplexExpansionRegex, "`${1}$value`${3}"
-
-        $replaced, $true
-    }
-
-    $replaced = @{}
-
-    foreach ($entry in $environment.GetEnumerator()) {
-        $replaced[$entry.Key] = Expand-Value $entry.Key $entry.Value
-    }
-
-    $replaced
 }
 
 function Invoke-Environment {
