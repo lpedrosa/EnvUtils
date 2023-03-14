@@ -105,7 +105,7 @@ Describe "ConvertFrom-Environment" {
 
 Describe "Invoke-Environment" {
     It "Should override EnvironmentFile with Environment Object values" {
-        $environmentOverrides = @{"HELLO" = "WORLD Overriden" }
+        $environmentOverrides = @{"HELLO" = "WORLD Overridden" }
 
         [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
         Invoke-Environment -EnvironmentFile .\fixtures\.simple.env -Environment $environmentOverrides {

@@ -84,4 +84,41 @@ Describe "EnvUtilsExpansion" {
             $result.ContainsKey('Error') | Should -Be $false
         }
     }
+
+    Context "Multiple variable expansion" {
+        It "Should expand all variables correctly" {
+            $testEnvironment = @{
+                VAR_1      = "Some string"
+                VAR_2      = "2345"
+                EXPANDED   = '$VAR_1 and $VAR_2'
+            }
+
+            $res = Expand-Environment $testEnvironment
+
+            $res['EXPANDED'] | Should -Be "$($testEnvironment['VAR_1']) and $($testEnvironment['VAR_2'])"
+        }
+
+        It "Should expand all variables and defaults correctly" {
+            $testEnvironment = @{
+                VAR_1      = "Some string"
+                EXPANDED   = '$VAR_1 and ${VAR_2:-default}'
+            }
+
+            $res = Expand-Environment $testEnvironment
+
+            $res['EXPANDED'] | Should -Be "$($testEnvironment['VAR_1']) and default"
+
+        }
+
+        It "Should expand all variables even if one fails the expansion" {
+            $testEnvironment = @{
+                VAR_1      = "Some string"
+                EXPANDED   = '$VAR_1 and $VAR_2'
+            }
+
+            $res = Expand-Environment $testEnvironment -WarningAction SilentlyContinue
+
+            $res['EXPANDED'] | Should -Be "$($testEnvironment['VAR_1']) and `$VAR_2"
+        }
+    }
 }
