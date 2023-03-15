@@ -89,7 +89,7 @@ function Invoke-Environment {
     )
 
     $envConfig = [hashtable]@{}
-    if ($EnvironmentFile) { 
+    if ($EnvironmentFile) {
         $envConfig = ConvertFrom-Environment $EnvironmentFile -NoExpand:$NoExpand
     }
 

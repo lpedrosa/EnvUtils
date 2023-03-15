@@ -6,7 +6,7 @@ Describe "EnvUtilsExpansion" {
 
     Context "Single variable expansion" {
         It "Should do a simple expansion when value is <valueType>" -ForEach @(
-            @{ TestValue = 2; ValueType = 'a number' }, 
+            @{ TestValue = 2; ValueType = 'a number' },
             @{ TestValue = 'a string'; ValueType = 'a simple string' }
             @{ TestValue = '123 (another \b\t\c)'; ValueType = 'a complex string' }
         ) {

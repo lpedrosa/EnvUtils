@@ -92,7 +92,7 @@ Describe "ConvertFrom-Environment" {
         It "Should not expand variables if asked" {
             'COOL_VALUE=nice nice
         VAR_TO_EXPAND=$COOL_VALUE' | Tee-Object '.fake.env'
-        
+
             $environment = ConvertFrom-Environment '.fake.env' -NoExpand
 
             $localExpansionValue = $environment["COOL_VALUE"]
