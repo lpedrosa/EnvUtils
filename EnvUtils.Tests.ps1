@@ -153,3 +153,64 @@ Describe "Invoke-Environment" {
         }
     }
 }
+
+Describe "New-Environment and Remove-Environment" {
+    AfterEach {
+        # hack to capture the potential config location
+        # so we can clean it even if tests fail
+        $currentSessionPid = [System.Diagnostics.Process]::GetCurrentProcess().Id
+
+        # get temp directory
+        $tempDirectory = [System.IO.Path]::GetTempPath()
+
+        # try to create temp folder to store config in
+        $configDirectory = [System.IO.Path]::Join($tempDirectory, "EnvUtils", $currentSessionPid)
+
+        if (Test-Path -Path $configDirectory) {
+            Remove-Item -Recurse $configDirectory
+        }
+    }
+
+    It "Should set the environment based on a hashtable" {
+        $environment = @{
+            HELLO = "WORLD"
+        }
+
+        [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
+        New-Environment -Environment $environment
+        [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $environment.HELLO
+        Remove-Environment
+        [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
+    }
+
+    It "Should set the environment based on a .env file" {
+        $file = "./fixtures/.simple-override.env"
+
+        [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
+        New-Environment -EnvironmentFile $file
+        [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be "WORLD2"
+        Remove-Environment
+        [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
+    }
+
+    It "Should set the environment based on files coming from the pipeline" {
+        $files = @("./fixtures/.simple.env", "./fixtures/.simple-override.env")
+
+        [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
+        $files | New-Environment
+        [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be "WORLD2"
+        Remove-Environment
+        [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
+    }
+
+    It "Should set the environment based on a hashtable coming from the pipeline" {
+        $environment = @{
+            HELLO = "WORLD"
+        }
+        [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
+        $environment | New-Environment
+        [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $environment.HELLO
+        Remove-Environment
+        [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
+    }
+}
