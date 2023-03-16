@@ -20,11 +20,12 @@ function ConvertFrom-Environment {
     )
 
     begin {
+        $ErrorActionPreference = 'Stop'
         $result = [hashtable]@{}
     }
 
     process {
-        $envFileContent = Get-Content $Path -ErrorAction Stop
+        $envFileContent = Get-Content $Path
 
         foreach ($line in $envFileContent) {
             Write-Debug "Processing line: $line"
@@ -66,51 +67,82 @@ function ConvertFrom-Environment {
 }
 
 function Invoke-Environment {
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName = "Environment")]
     param (
-        [Parameter(Mandatory = $true,
-            Position = 0,
-            ValueFromPipeline = $true,
-            ValueFromPipelineByPropertyName = $true)]
+        [Parameter(Mandatory = $true, Position = 0)]
         [scriptblock]
         $ScriptBlock,
 
-        [Parameter()]
+        [Parameter(Mandatory = $true,
+            ParameterSetName = "EnvironmentFile",
+            ValueFromPipeline = $true,
+            ValueFromPipelineByPropertyName = $true,
+            HelpMessage = "Path to one or more `".env`" locations.")]
         [string[]]
         $EnvironmentFile,
 
-        [Parameter()]
+        [Parameter(
+            ParameterSetName = "EnvironmentFile",
+            HelpMessage = "Do not expand variables on values.")]
         [switch]
         $NoExpand,
 
-        [Parameter()]
+        [Parameter(ParameterSetName = "EnvironmentFile",
+            ValueFromPipelineByPropertyName = $true)]
+        [Parameter(Mandatory = $true,
+            ParameterSetName = "Environment",
+            ValueFromPipeline = $true,
+            ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
         [hashtable]
         $Environment
     )
-
-    $envConfig = [hashtable]@{}
-    if ($EnvironmentFile) {
-        $envConfig = ConvertFrom-Environment $EnvironmentFile -NoExpand:$NoExpand
+    begin {
+        $ErrorActionPreference = 'Stop'
+        $envFiles = @()
     }
-
-    if ($Environment) {
-        foreach ($key in $Environment.Keys) {
-            if ($envConfig.ContainsKey($key)) {
-                $envConfig.Remove($key)
+    process {
+        if ($PSCmdlet.ParameterSetName -eq "EnvironmentFile") {
+            foreach ($envFile in $EnvironmentFile) {
+                if (Test-Path -Path $envFile) {
+                    $envFiles += $envFile
+                }
+                else {
+                    throw "Cannot find environment file `"$envFile`""
+                }
             }
         }
-        $envConfig += $Environment
     }
+    end {
+        $envConfig = [hashtable]@{}
 
-    foreach ($entry in $envConfig.GetEnumerator()) {
-        Set-Item -Path "Env:$($entry.Key)" -Value $entry.Value
-    }
-    try {
-        & $ScriptBlock
-    }
-    finally {
+        switch ($PSCmdlet.ParameterSetName) {
+            "EnvironmentFile" {
+                $envConfig = ConvertFrom-Environment $envFiles -NoExpand:$NoExpand
+                if ($Environment) {
+                    foreach ($key in $Environment.Keys) {
+                        if ($envConfig.ContainsKey($key)) {
+                            $envConfig.Remove($key)
+                        }
+                    }
+                    $envConfig += $Environment
+                }
+            }
+            "Environment" {
+                $envConfig = $Environment
+            }
+        }
+
         foreach ($entry in $envConfig.GetEnumerator()) {
-            Remove-Item -Path "Env:$($entry.Key)"
+            Set-Item -Path "Env:$($entry.Key)" -Value $entry.Value
+        }
+        try {
+            & $ScriptBlock
+        }
+        finally {
+            foreach ($entry in $envConfig.GetEnumerator()) {
+                Remove-Item -Path "Env:$($entry.Key)"
+            }
         }
     }
 
@@ -119,6 +151,8 @@ function Invoke-Environment {
 function New-Environment {
     [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = "Environment")]
     param(
+        [Parameter(ParameterSetName = "EnvironmentFile",
+            ValueFromPipelineByPropertyName = $true)]
         [Parameter(Mandatory = $true,
             Position = 0,
             ParameterSetName = "Environment",
@@ -152,8 +186,8 @@ function New-Environment {
         $tempDirectory = [System.IO.Path]::GetTempPath()
 
         # try to create temp folder to store config in
-        $configDirectory = [System.IO.Path]::Join($tempDirectory, "EnvUtils", $currentSessionPid)
-        $configPath = [System.IO.Path]::Join($configDirectory, "config.json")
+        $configDirectory = [System.IO.Path]::Combine($tempDirectory, "EnvUtils", $currentSessionPid)
+        $configPath = [System.IO.Path]::Combine($configDirectory, "config.json")
 
         if ((Test-Path -Path $configPath) -or (Test-Path -Path $configDirectory)) {
             throw "Found Custom Environment for current session. Remove it first with 'Remove-Environment'"
@@ -163,11 +197,13 @@ function New-Environment {
     }
     process {
         if ($PSCmdlet.ParameterSetName -eq "EnvironmentFile") {
-            if (Test-Path -Path $EnvironmentFile) {
-                $EnvironmentFile.ForEach({ $envFiles += $_ })
-            }
-            else {
-                throw "Cannot find environment file `"$EnvironmentFile`""
+            foreach ($envFile in $EnvironmentFile) {
+                if (Test-Path -Path $envFile) {
+                    $envFiles += $envFile
+                }
+                else {
+                    throw "Cannot find environment file `"$envFile`""
+                }
             }
         }
     }
@@ -175,6 +211,14 @@ function New-Environment {
         switch ($PSCmdlet.ParameterSetName) {
             "EnvironmentFile" {
                 $envConfig = ConvertFrom-Environment $envFiles -NoExpand:$NoExpand
+                if ($Environment) {
+                    foreach ($key in $Environment.Keys) {
+                        if ($envConfig.ContainsKey($key)) {
+                            $envConfig.Remove($key)
+                        }
+                    }
+                    $envConfig += $Environment
+                }
             }
             "Environment" {
                 $envConfig = $Environment
@@ -208,8 +252,14 @@ function New-Environment {
             $ConfirmPreference = 'None'
             New-Item -ItemType Directory -Path "$tempDirectory/EnvUtils/$currentSessionPid" > $null
 
+            if ($overriddenVars.Count -eq 0) {
+                # store null in the config if no overrides
+                # (as opposed to an empty object)
+                $overriddenVars = $null
+            }
+
             $config = @{
-                Overridden  = $overriddenVars.Count -eq 0 ? $null : $overriddenVars
+                Overridden  = $overriddenVars
                 Environment = $envConfig
             }
 
@@ -229,22 +279,23 @@ function Remove-Environment {
     $tempDirectory = [System.IO.Path]::GetTempPath()
 
     # try to create temp folder to store config in
-    $configDirectory = [System.IO.Path]::Join($tempDirectory, "EnvUtils", $currentSessionPid)
-    $configPath = [System.IO.Path]::Join($configDirectory, "config.json")
+    $configDirectory = [System.IO.Path]::Combine($tempDirectory, "EnvUtils", $currentSessionPid)
+    $configPath = [System.IO.Path]::Combine($configDirectory, "config.json")
 
     if ((Test-Path -Path $configPath) -or (Test-Path -Path $configDirectory)) {
         # read session config
-        $config = (Get-Content $configPath | ConvertFrom-Json -AsHashtable)
+        # FIXME: will not work in windows powershell 5.1
+        $config = (Get-Content $configPath | ConvertFrom-Json)
 
-        foreach ($envEntry in $config.Environment.GetEnumerator()) {
-            Write-Verbose "Removing environment variable `"$($envEntry.Key)`""
-            Remove-Item -Path "Env:$($envEntry.Key)"
+        foreach ($envEntry in $config.Environment.PSObject.Properties) {
+            Write-Verbose "Removing environment variable `"$($envEntry.Name)`""
+            Remove-Item -Path "Env:$($envEntry.Name)"
         }
 
         if ($config.Overridden) {
-            foreach ($envEntry in $config.Overridden.GetEnumerator()) {
-                Write-Verbose "Restoring environment variable `"$($envEntry.Key)`""
-                Set-Item -Path "Env:$($envEntry.Key)" -Value $envEntry.Value
+            foreach ($envEntry in $config.Overridden.PSObject.Properties) {
+                Write-Verbose "Restoring environment variable `"$($envEntry.Name)`""
+                Set-Item -Path "Env:$($envEntry.Name)" -Value $envEntry.Value
             }
         }
 

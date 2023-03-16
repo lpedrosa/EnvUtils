@@ -104,16 +104,6 @@ Describe "ConvertFrom-Environment" {
 }
 
 Describe "Invoke-Environment" {
-    It "Should override EnvironmentFile with Environment Object values" {
-        $environmentOverrides = @{"HELLO" = "WORLD Overridden" }
-
-        [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
-        Invoke-Environment -EnvironmentFile .\fixtures\.simple.env -Environment $environmentOverrides {
-            [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $environmentOverrides.HELLO
-        }
-        [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
-    }
-
     Context "From EnvironmentFile" {
         It "Should make variables available only in the script block" {
             [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
@@ -135,6 +125,15 @@ Describe "Invoke-Environment" {
             }
             [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
             [System.Environment]::GetEnvironmentVariable("MESSAGE") | Should -Be $null
+        }
+        It "Should override EnvironmentFile with Environment Object values" {
+            $environmentOverrides = @{"HELLO" = "WORLD Overridden" }
+
+            [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
+            Invoke-Environment -EnvironmentFile .\fixtures\.simple.env -Environment $environmentOverrides {
+                [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $environmentOverrides.HELLO
+            }
+            [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
         }
     }
 
@@ -164,7 +163,7 @@ Describe "New-Environment and Remove-Environment" {
         $tempDirectory = [System.IO.Path]::GetTempPath()
 
         # try to create temp folder to store config in
-        $configDirectory = [System.IO.Path]::Join($tempDirectory, "EnvUtils", $currentSessionPid)
+        $configDirectory = [System.IO.Path]::Combine($tempDirectory, "EnvUtils", $currentSessionPid)
 
         if (Test-Path -Path $configDirectory) {
             Remove-Item -Recurse $configDirectory
@@ -210,6 +209,23 @@ Describe "New-Environment and Remove-Environment" {
         [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
         $environment | New-Environment
         [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $environment.HELLO
+        Remove-Environment
+        [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
+    }
+
+    It "Should fail if one of the env files doesn't exist" {
+        $files = @("./fixtures/.simple.env", "i-do-not-exist")
+
+        { $files | New-Environment } | Should -Throw
+        { New-Environment -EnvironmentFile $files } | Should -Throw
+    }
+
+    It "Should override environment file with hashtable values" {
+        $environmentOverrides = @{"HELLO" = "WORLD Overridden" }
+
+        [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
+        New-Environment -EnvironmentFile .\fixtures\.simple.env -Environment $environmentOverrides
+        [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $environmentOverrides.HELLO
         Remove-Environment
         [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
     }
