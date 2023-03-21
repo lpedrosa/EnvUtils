@@ -33,4 +33,4 @@ $env:HELLO -eq $null
 
 ## License
 
-MIT
+[MIT](./LICENSE)
