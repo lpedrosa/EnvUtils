@@ -1,6 +1,6 @@
 # EnvUtils
 
-Powershell module offering utilities to read environment variables from `dotenv` files, or ad-hoc
+PowerShell module offering utilities to read environment variables from `dotenv` files, or ad-hoc
 hashmaps.
 
 ## Example
