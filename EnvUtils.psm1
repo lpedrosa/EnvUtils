@@ -1,5 +1,10 @@
 Import-Module $PSScriptRoot/private/EnvUtilsExpansion.psm1 -Force
 
+$script:SessionConfig = [PSCustomObject]@{
+    Overridden  = @()
+    Environment = @()
+}
+
 function ConvertFrom-Environment {
     [CmdletBinding()]
     param (
@@ -174,23 +179,26 @@ function New-Environment {
             ParameterSetName = "EnvironmentFile",
             HelpMessage = "Do not expand variables on values.")]
         [switch]
-        $NoExpand
+        $NoExpand,
+        [switch]
+        $Force
     )
     begin {
         $ErrorActionPreference = 'Stop'
 
-        # get current session PID
-        $currentSessionPid = [System.Diagnostics.Process]::GetCurrentProcess().Id
+        if ($Force -and -not $Confirm) {
+            $ConfirmPreference = 'None'
+        }
 
-        # get temp directory
-        $tempDirectory = [System.IO.Path]::GetTempPath()
-
-        # try to create temp folder to store config in
-        $configDirectory = [System.IO.Path]::Combine($tempDirectory, "EnvUtils", $currentSessionPid)
-        $configPath = [System.IO.Path]::Combine($configDirectory, "config.json")
-
-        if ((Test-Path -Path $configPath) -or (Test-Path -Path $configDirectory)) {
-            throw "Found Custom Environment for current session. Remove it first with 'Remove-Environment'"
+        if ($script:SessionConfig.Environment.Length -ne 0) {
+            $operationMsg = "Removing current Custom Environment"
+            $targetMsg = "Would you like to remove the current Custom Environment?"
+            if ($Force -or $PSCmdlet.ShouldContinue($targetMsg, $operationMsg)) {
+                Remove-Environment -Verbose:$VerbosePreference
+            }
+            else {
+                throw "Found Custom Environment for current session. Remove it first with 'Remove-Environment'"
+            }
         }
 
         $envFiles = @()
@@ -225,8 +233,6 @@ function New-Environment {
             }
         }
 
-        $overriddenVars = @{}
-
         foreach ($envEntry in $envConfig.GetEnumerator()) {
             $confirmTitle = "Set Environment Variable Prompt"
 
@@ -236,73 +242,53 @@ function New-Environment {
                 $whatIfMsg = "Overriding environment variable `"$($envEntry.Key)`""
                 $confirmMsg = "Would you like to override environment variable `"$($envEntry.Key)`"?"
 
-                $overriddenVars[$envEntry.Key] = $existingVarValue
+                if ($PSCmdlet.ShouldProcess($whatIfMsg, $confirmMsg, $confirmTitle)) {
+                    Set-Item -Path "Env:$($envEntry.Key)" -Value $envEntry.Value -Confirm:$false
+                    $script:SessionConfig.Overridden += @{ Name = $envEntry.Key; Value = $existingVarValue }
+                    $script:SessionConfig.Environment += @{ Name = $envEntry.Key; Value = $envEntry.Value }
+                }
             }
             else {
                 $whatIfMsg = "Setting environment variable `"$($envEntry.Key)`""
                 $confirmMsg = "Would you like to set environment variable `"$($envEntry.Key)`"?"
+
+                if ($PSCmdlet.ShouldProcess($whatIfMsg, $confirmMsg, $confirmTitle)) {
+                    Set-Item -Path "Env:$($envEntry.Key)" -Value $envEntry.Value -Confirm:$false
+                    $script:SessionConfig.Environment += @{ Name = $envEntry.Key; Value = $envEntry.Value }
+                }
             }
-
-            if ($PSCmdlet.ShouldProcess($whatIfMsg, $confirmMsg, $confirmTitle)) {
-                Set-Item -Path "Env:$($envEntry.Key)" -Value $envEntry.Value
-            }
-        }
-
-        if (-not $WhatIfPreference) {
-            $ConfirmPreference = 'None'
-            New-Item -ItemType Directory -Path "$tempDirectory/EnvUtils/$currentSessionPid" > $null
-
-            if ($overriddenVars.Count -eq 0) {
-                # store null in the config if no overrides
-                # (as opposed to an empty object)
-                $overriddenVars = $null
-            }
-
-            $config = @{
-                Overridden  = $overriddenVars
-                Environment = $envConfig
-            }
-
-            ConvertTo-Json $config > $configPath
         }
     }
+}
+
+function Get-Environment {
+    [CmdletBinding()]
+    param()
+    $script:SessionConfig
 }
 
 function Remove-Environment {
     [CmdletBinding()]
     param()
 
-    # get current session PID
-    $currentSessionPid = [System.Diagnostics.Process]::GetCurrentProcess().Id
-
-    # get temp directory
-    $tempDirectory = [System.IO.Path]::GetTempPath()
-
-    # try to create temp folder to store config in
-    $configDirectory = [System.IO.Path]::Combine($tempDirectory, "EnvUtils", $currentSessionPid)
-    $configPath = [System.IO.Path]::Combine($configDirectory, "config.json")
-
-    if ((Test-Path -Path $configPath) -or (Test-Path -Path $configDirectory)) {
-        # read session config
-        # FIXME: will not work in windows powershell 5.1
-        $config = (Get-Content $configPath | ConvertFrom-Json)
-
-        foreach ($envEntry in $config.Environment.PSObject.Properties) {
-            Write-Verbose "Removing environment variable `"$($envEntry.Name)`""
-            Remove-Item -Path "Env:$($envEntry.Name)"
-        }
-
-        if ($config.Overridden) {
-            foreach ($envEntry in $config.Overridden.PSObject.Properties) {
-                Write-Verbose "Restoring environment variable `"$($envEntry.Name)`""
-                Set-Item -Path "Env:$($envEntry.Name)" -Value $envEntry.Value
-            }
-        }
-
-        # remove directory
-        Remove-Item -Recurse $configDirectory
-    }
-    else {
+    if ($script:SessionConfig.Environment.Length -eq 0) {
         Write-Warning 'Custom Environment not found for given session, skipping...'
+        return
+    }
+
+    foreach ($envEntry in $script:SessionConfig.Environment) {
+        Write-Verbose "Removing environment variable `"$($envEntry.Name)`""
+        Remove-Item -Path "Env:$($envEntry.Name)"
+    }
+
+    foreach ($envEntry in $script:SessionConfig.Overridden) {
+        Write-Verbose "Restoring environment variable `"$($envEntry.Name)`""
+        Set-Item -Path "Env:$($envEntry.Name)" -Value $envEntry.Value
+    }
+
+    # clear config
+    $script:SessionConfig = [PSCustomObject]@{
+        Overridden  = @()
+        Environment = @()
     }
 }

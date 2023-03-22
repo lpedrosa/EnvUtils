@@ -154,22 +154,6 @@ Describe "Invoke-Environment" {
 }
 
 Describe "New-Environment and Remove-Environment" {
-    AfterEach {
-        # hack to capture the potential config location
-        # so we can clean it even if tests fail
-        $currentSessionPid = [System.Diagnostics.Process]::GetCurrentProcess().Id
-
-        # get temp directory
-        $tempDirectory = [System.IO.Path]::GetTempPath()
-
-        # try to create temp folder to store config in
-        $configDirectory = [System.IO.Path]::Combine($tempDirectory, "EnvUtils", $currentSessionPid)
-
-        if (Test-Path -Path $configDirectory) {
-            Remove-Item -Recurse $configDirectory
-        }
-    }
-
     It "Should set the environment based on a hashtable" {
         $environment = @{
             HELLO = "WORLD"
