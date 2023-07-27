@@ -130,6 +130,20 @@ Describe "Invoke-Environment" {
             }
             [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $null
         }
+
+        It "Should restore old environment values" {
+            $oldEnvValue = "WORLD"
+            $testEnvValue = "WORLD Overridden"
+
+            [System.Environment]::SetEnvironmentVariable("HELLO", $oldEnvValue)
+            Invoke-Environment -Environment @{"HELLO" = $testEnvValue } {
+                [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $testEnvValue
+            }
+            [System.Environment]::GetEnvironmentVariable("HELLO") | Should -Be $oldEnvValue
+
+            # don't forget to clean up HELLO
+            [System.Environment]::SetEnvironmentVariable("HELLO", $null)
+        }
     }
 
     Context "From Environment Object" {

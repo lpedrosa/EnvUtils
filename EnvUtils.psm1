@@ -138,7 +138,16 @@ function Invoke-Environment {
             }
         }
 
+        $overridden = @()
+
         foreach ($entry in $envConfig.GetEnumerator()) {
+            # store overridden values so we can restore them later
+            $existingVarValue = [System.Environment]::GetEnvironmentVariable($entry.Key)
+            if ($existingVarValue) {
+                Write-Debug "Storing overridden environment variable `"$($entry.Name)`""
+                $overridden += @{Name = $entry.Key; Value = $existingVarValue }
+            }
+
             Set-Item -Path "Env:$($entry.Key)" -Value $entry.Value
         }
         try {
@@ -147,6 +156,11 @@ function Invoke-Environment {
         finally {
             foreach ($entry in $envConfig.GetEnumerator()) {
                 Remove-Item -Path "Env:$($entry.Key)"
+            }
+            # restore overridden values
+            foreach($entry in $overridden) {
+                Write-Debug "Restoring environment variable `"$($entry.Name)`""
+                Set-Item -Path "Env:$($entry.Name)" -Value $entry.Value
             }
         }
     }
