@@ -1,0 +1,12 @@
+name: Test EnvUtils
+on: push
+
+jobs:
+  test-envutils-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+      - name: Run tests
+        shell: pwsh
+        run: ./test.ps1
