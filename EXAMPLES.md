@@ -38,3 +38,25 @@ Invoke-Environment -EnvironmentFile .env -Environment $overrides {
     $env:HELLO -eq 'OVERRIDE'
 }
 ```
+
+## Get-Environment and Remove-Environment
+
+```pwsh
+'HELLO = WORLD' > .env
+
+# Setup a new enviroment
+New-Environment .env
+$env:HELLO -eq 'WORLD'
+
+
+# Do some work with this environment set
+# ...
+
+# To check which variable are set/overridden in the current environment
+Get-Environment
+
+
+# To stop using the current environment
+Remove-Environment
+$env:HELLO -eq $null
+```
